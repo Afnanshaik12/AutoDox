@@ -10,6 +10,7 @@ const PORT = process.env.PORT || 5001;
 
 // Allowed origins configuration supporting web app, local dev, and Chrome extensions
 const allowedOrigins = [
+  'https://auto-dox.vercel.app',
   process.env.APP_URL,
   process.env.CORS_ORIGIN,
   'https://autodox-backend.onrender.com',
@@ -17,10 +18,12 @@ const allowedOrigins = [
   'http://localhost:5001',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5001'
-].filter(Boolean);
+]
+  .filter(Boolean)
+  .map((origin) => origin.trim().replace(/\/+$/, ''));
 
 // CORS configuration supporting web app, local dev, and Chrome extensions
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     // 1. Allow requests with no origin (mobile apps, curl, extension background, server-to-server)
     if (!origin) {
@@ -33,9 +36,10 @@ app.use(cors({
     }
 
     // 3. Allow explicitly configured origins, Vercel deployments, and local development hosts
-    const isApproved = allowedOrigins.some((allowed) => origin === allowed || origin.startsWith(allowed));
-    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    const isVercel = /^https:\/\/[a-zA-Z0-9_.-]+\.vercel\.app$/.test(origin);
+    const cleanOrigin = origin.trim().replace(/\/+$/, '');
+    const isApproved = allowedOrigins.includes(cleanOrigin);
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(cleanOrigin);
+    const isVercel = /^https:\/\/[a-zA-Z0-9_.-]+\.vercel\.app$/.test(cleanOrigin);
 
     if (isApproved || isLocalhost || isVercel || process.env.NODE_ENV === 'test') {
       return callback(null, true);
@@ -46,8 +50,12 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
@@ -91,6 +99,12 @@ app.use((req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
+  if (err && err.message && err.message.startsWith('CORS blocked:')) {
+    return res.status(403).json({
+      status: 'error',
+      message: err.message
+    });
+  }
   console.error('[AutoDox API] Unhandled server error:', err);
   res.status(500).json({
     status: 'error',
