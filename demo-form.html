@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoDox AI — Interactive Form Autofill Testbed</title>
+  <style>
+    :root {
+      --bg-base: #f8fafc;
+      --bg-card: #ffffff;
+      --border-color: #e2e8f0;
+      --blue-primary: #1e3a8a;
+      --blue-accent: #2563eb;
+      --blue-light: #eff6ff;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-light: #64748b;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      padding: 32px 20px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Header Banner */
+    .header-banner {
+      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+      color: #ffffff;
+      padding: 28px 32px;
+      border-radius: var(--radius-lg);
+      margin-bottom: 24px;
+      box-shadow: 0 10px 25px -5px rgba(30, 58, 138, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header-banner::after {
+      content: '';
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 180px;
+      height: 180px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .header-title {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .header-subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+      max-width: 640px;
+      line-height: 1.5;
+    }
+
+    /* Instructions card */
+    .guide-card {
+      background-color: #ffffff;
+      border: 1px solid var(--border-color);
+      border-left: 4px solid var(--blue-accent);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .guide-steps {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background-color: var(--blue-light);
+      color: var(--blue-accent);
+      font-weight: 700;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Forms Grid */
+    .forms-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .forms-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .form-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .form-header {
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 14px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .form-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .form-tag {
+      font-size: 11px;
+      background-color: var(--blue-light);
+      color: var(--blue-accent);
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-row-two {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 13px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background-color: #ffffff;
+      color: var(--text-main);
+      transition: all 0.2s ease;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--blue-accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+
+    /* Actions */
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    button.btn-submit {
+      flex: 1;
+      background: linear-gradient(135deg, var(--blue-accent) 0%, var(--blue-primary) 100%);
+      color: #ffffff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+
+    button.btn-submit:hover {
+      opacity: 0.95;
+    }
+
+    button.btn-clear {
+      background-color: var(--bg-base);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.btn-clear:hover {
+      background-color: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header Banner -->
+    <header class="header-banner">
+      <div class="badge-pill">
+        <span>⚡ AutoDox AI Live Testbed</span>
+      </div>
+      <h1 class="header-title">Intelligent Form Autofill Verification Page</h1>
+      <p class="header-subtitle">
+        Use this interactive test page to verify AutoDox AI's instant document field matching, DOM event triggering, and synthetic input autofill.
+      </p>
+    </header>
+
+    <!-- Quick Guide -->
+    <div class="guide-card">
+      <div class="guide-steps">
+        <div class="step-item">
+          <span class="step-num">1</span>
+          <span>Open AutoDox AI Extension popup</span>
+        </div>
+        <div class="step-item">
+          <span class="step-num">2</span>
+          <span>Click "Scan & Match Form Fields"</span>
+        </div>
+        <div class="step-item">
+          <span class="step-num">3</span>
+          <span>Click "Autofill Matched Fields"</span>
+        </div>
+      </div>
+      <button class="btn-clear" onclick="clearAllForms()">Reset Fields</button>
+    </div>
+
+    <!-- Forms -->
+    <div class="forms-grid">
+      <!-- Form 1: Job / Employment Application -->
+      <section class="form-card">
+        <div class="form-header">
+          <h2 class="form-title">Job Application Form</h2>
+          <span class="form-tag">Employment</span>
+        </div>
+
+        <form id="jobForm" onsubmit="handleFormSubmit(event, 'Job Application')">
+          <div class="form-group">
+            <label for="fullName">Full Legal Name</label>
+            <input type="text" id="fullName" name="fullName" autocomplete="name" placeholder="e.g. Alex Morgan" />
+          </div>
+
+          <div class="form-row-two">
+            <div class="form-group">
+              <label for="firstName">First Name</label>
+              <input type="text" id="firstName" name="firstName" autocomplete="given-name" placeholder="Alex" />
+            </div>
+            <div class="form-group">
+              <label for="lastName">Last Name</label>
+              <input type="text" id="lastName" name="lastName" autocomplete="family-name" placeholder="Morgan" />
+            </div>
+          </div>
+
+          <div class="form-row-two">
+            <div class="form-group">
+              <label for="email">Email Address</label>
+              <input type="email" id="email" name="email" autocomplete="email" placeholder="alex@example.com" />
+            </div>
+            <div class="form-group">
+              <label for="phone">Phone Number</label>
+              <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="+1 (555) 000-0000" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="address">Street Address</label>
+            <input type="text" id="address" name="address" autocomplete="address-line1" placeholder="Street & Number" />
+          </div>
+
+          <div class="form-row-two">
+            <div class="form-group">
+              <label for="employer">Current Employer</label>
+              <input type="text" id="employer" name="employer" placeholder="Company Name" />
+            </div>
+            <div class="form-group">
+              <label for="jobTitle">Job Title</label>
+              <input type="text" id="jobTitle" name="jobTitle" placeholder="Position / Role" />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-submit">Submit Application</button>
+            <button type="button" class="btn-clear" onclick="clearForm('jobForm')">Clear</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Form 2: Travel & Identity Verification Form -->
+      <section class="form-card">
+        <div class="form-header">
+          <h2 class="form-title">Travel & KYC Verification</h2>
+          <span class="form-tag">Identity Document</span>
+        </div>
+
+        <form id="kycForm" onsubmit="handleFormSubmit(event, 'Identity Verification')">
+          <div class="form-group">
+            <label for="docNumber">Document / Passport Number</label>
+            <input type="text" id="docNumber" name="passport_number" placeholder="Passport or ID Number" />
+          </div>
+
+          <div class="form-group">
+            <label for="nationality">Nationality / Country</label>
+            <input type="text" id="nationality" name="nationality" autocomplete="country-name" placeholder="e.g. United States" />
+          </div>
+
+          <div class="form-row-two">
+            <div class="form-group">
+              <label for="city">City of Residence</label>
+              <input type="text" id="city" name="city" placeholder="City" />
+            </div>
+            <div class="form-group">
+              <label for="state">State / Province</label>
+              <input type="text" id="state" name="state" placeholder="State" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="issueDate">Document Issue Date</label>
+            <input type="text" id="issueDate" name="issue_date" placeholder="YYYY-MM-DD" />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-submit">Verify Identity</button>
+            <button type="button" class="btn-clear" onclick="clearForm('kycForm')">Clear</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    function clearForm(formId) {
+      const form = document.getElementById(formId);
+      if (form) form.reset();
+    }
+
+    function clearAllForms() {
+      clearForm('jobForm');
+      clearForm('kycForm');
+    }
+
+    function handleFormSubmit(e, formName) {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const entries = Object.fromEntries(formData.entries());
+      alert(`[Demo Test Success] ${formName} submitted with ${Object.keys(entries).length} field(s):\n\n` + JSON.stringify(entries, null, 2));
+    }
+  </script>
+</body>
+</html>

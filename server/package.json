@@ -1,0 +1,20 @@
+{
+  "name": "autodox-backend",
+  "version": "1.0.0",
+  "description": "AutoDox AI Shared Backend API (Supabase Auth & PostgreSQL)",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node tests/auth.test.js && node tests/vault.test.js",
+    "test:auth": "node tests/auth.test.js",
+    "test:vault": "node tests/vault.test.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "zod": "^3.24.1"
+  }
+}

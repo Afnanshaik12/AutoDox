@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production build
+dist/
+build/
+
+# Environment and secrets
+.env
+.env.*
+server/.env
+server/.env.*
+*.env
+!.env.example
+!server/.env.example
+
+# Supabase CLI temp
+supabase/.temp/
+.temp/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor & OS files
+.DS_Store
+Thumbs.db
+*.local
+.vscode/
+.idea/
