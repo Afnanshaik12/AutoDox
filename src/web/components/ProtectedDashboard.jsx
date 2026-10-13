@@ -16,6 +16,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../config/api';
 import VaultManager from './VaultManager';
 
 export default function ProtectedDashboard() {
@@ -29,7 +30,7 @@ export default function ProtectedDashboard() {
   useEffect(() => {
     async function fetchHealth() {
       try {
-        const res = await fetch('/api/health');
+        const res = await fetch(apiUrl('/api/health'));
         if (res.ok) {
           const data = await res.json();
           setDbHealth(data);

@@ -7,7 +7,7 @@
 
 import { storage } from './storage';
 
-const DEFAULT_SERVER_URL = 'http://localhost:5001';
+const DEFAULT_SERVER_URL = 'https://autodox-backend.onrender.com';
 
 /**
  * Resolves the backend server endpoint
@@ -51,7 +51,7 @@ export async function loginAccount({ email, password }) {
   } catch (err) {
     return {
       success: false,
-      message: 'Could not connect to AutoDox AI backend. Ensure the server is running on port 5001.'
+      message: 'Could not connect to AutoDox AI backend. Please verify your connection or ensure the server is online.'
     };
   }
 }

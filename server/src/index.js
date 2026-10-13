@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 5001;
 const allowedOrigins = [
   process.env.APP_URL,
   process.env.CORS_ORIGIN,
+  'https://autodox-backend.onrender.com',
   'http://localhost:5173',
   'http://localhost:5001',
   'http://127.0.0.1:5173',
@@ -31,11 +32,12 @@ app.use(cors({
       return callback(null, true);
     }
 
-    // 3. Allow explicitly configured origins and local development hosts
+    // 3. Allow explicitly configured origins, Vercel deployments, and local development hosts
     const isApproved = allowedOrigins.some((allowed) => origin === allowed || origin.startsWith(allowed));
     const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    const isVercel = /^https:\/\/[a-zA-Z0-9_.-]+\.vercel\.app$/.test(origin);
 
-    if (isApproved || isLocalhost || process.env.NODE_ENV === 'test') {
+    if (isApproved || isLocalhost || isVercel || process.env.NODE_ENV === 'test') {
       return callback(null, true);
     }
 

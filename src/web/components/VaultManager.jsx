@@ -26,6 +26,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../config/api';
 import VaultLiveSearch from './VaultLiveSearch';
 
 // Profile type visual mapping
@@ -176,7 +177,7 @@ export default function VaultManager() {
     if (!token) return;
     setLoadingProfiles(true);
     try {
-      const res = await fetch('/api/vault/profiles', {
+      const res = await fetch(apiUrl('/api/vault/profiles'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -208,7 +209,7 @@ export default function VaultManager() {
     if (!token || !profileId) return;
     setLoadingAttributes(true);
     try {
-      const res = await fetch(`/api/vault/attributes?profileId=${profileId}`, {
+      const res = await fetch(apiUrl(`/api/vault/attributes?profileId=${profileId}`), {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -253,7 +254,7 @@ export default function VaultManager() {
   const handleSeedProfiles = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/vault/profiles/seed', {
+      const res = await fetch(apiUrl('/api/vault/profiles/seed'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -311,7 +312,7 @@ export default function VaultManager() {
     const method = isEditing ? 'PUT' : 'POST';
 
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(apiUrl(endpoint), {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -340,7 +341,7 @@ export default function VaultManager() {
     if (!modalTarget) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/vault/profiles/${modalTarget.id}`, {
+      const res = await fetch(apiUrl(`/api/vault/profiles/${modalTarget.id}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -400,7 +401,7 @@ export default function VaultManager() {
     const method = isEditing ? 'PUT' : 'POST';
 
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(apiUrl(endpoint), {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -436,7 +437,7 @@ export default function VaultManager() {
     if (!modalTarget) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/vault/attributes/${modalTarget.id}`, {
+      const res = await fetch(apiUrl(`/api/vault/attributes/${modalTarget.id}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

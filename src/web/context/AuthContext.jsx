@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { apiUrl } from '../config/api';
 
 const AuthContext = createContext(null);
 
@@ -19,7 +20,7 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const res = await fetch('/api/auth/me', {
+        const res = await fetch(apiUrl('/api/auth/me'), {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -48,7 +49,7 @@ export function AuthProvider({ children }) {
   const register = async ({ name, email, password }) => {
     setAuthError(null);
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(apiUrl('/api/auth/register'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -85,7 +86,7 @@ export function AuthProvider({ children }) {
   const login = async ({ email, password }) => {
     setAuthError(null);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -122,7 +123,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       if (token) {
-        await fetch('/api/auth/logout', {
+        await fetch(apiUrl('/api/auth/logout'), {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`
@@ -146,7 +147,7 @@ export function AuthProvider({ children }) {
     }
 
     const start = performance.now();
-    const res = await fetch('/api/auth/me', {
+    const res = await fetch(apiUrl('/api/auth/me'), {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -165,7 +166,7 @@ export function AuthProvider({ children }) {
     setAuthError(null);
     try {
       const redirectTo = `${window.location.origin}/#reset-password`;
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(apiUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -199,7 +200,7 @@ export function AuthProvider({ children }) {
   const resetPassword = async ({ password, token, email, code }) => {
     setAuthError(null);
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(apiUrl('/api/auth/reset-password'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -233,7 +234,7 @@ export function AuthProvider({ children }) {
   // Verify recovery token
   const verifyRecoveryToken = async (tokenToVerify) => {
     try {
-      const res = await fetch('/api/auth/verify-recovery', {
+      const res = await fetch(apiUrl('/api/auth/verify-recovery'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

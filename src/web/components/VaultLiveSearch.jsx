@@ -12,6 +12,7 @@ import {
   CornerDownLeft,
   SearchX
 } from 'lucide-react';
+import { apiUrl } from '../config/api';
 
 /**
  * Normalizes text by removing extra spaces and harmless punctuation
@@ -99,7 +100,7 @@ export default function VaultLiveSearch({ token, onSelectFolder, onSelectAttribu
 
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/vault/search?q=${encodeURIComponent(cleanQ)}`, {
+        const res = await fetch(apiUrl(`/api/vault/search?q=${encodeURIComponent(cleanQ)}`), {
           headers: {
             Authorization: `Bearer ${token}`
           },
