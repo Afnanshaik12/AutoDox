@@ -32,3 +32,5 @@ Thumbs.db
 *.local
 .vscode/
 .idea/
+AutoDox-extension.zip
+AutoDox-extension/

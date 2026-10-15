@@ -170,3 +170,39 @@ export async function setActiveProfileId(profileId) {
   return profileId;
 }
 
+/**
+ * Creates a secure single-use authorization code to hand off the authenticated
+ * session from the Chrome extension to the AutoDox website portal.
+ * NEVER puts tokens, passwords, or keys in URL parameters.
+ */
+export async function createAuthHandoff(tokenOverride = null) {
+  let token = tokenOverride;
+  if (!token) {
+    const res = await storage.get(['autodox_account']);
+    token = res.autodox_account?.token;
+  }
+  if (!token) return null;
+
+  const baseUrl = await getApiBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/handoff/create`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ targetUrl: '/#/vault' })
+    });
+
+    if (!res.ok) {
+      console.warn('[AutoDox API] Handoff creation responded with HTTP', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    return data.code || null;
+  } catch (err) {
+    console.error('[AutoDox API] Error generating handoff code:', err);
+    return null;
+  }
+}

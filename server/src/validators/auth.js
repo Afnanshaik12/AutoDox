@@ -49,6 +49,20 @@ export const resetPasswordSchema = z.object({
   code: z.string().optional()
 });
 
+export const handoffExchangeSchema = z.object({
+  code: z
+    .string({ required_error: 'Authorization handoff code is required' })
+    .trim()
+    .min(1, 'Authorization handoff code is required'),
+  expectedUserId: z.string().optional()
+});
+
+export const oauthExchangeSchema = z.object({
+  code: z
+    .string({ required_error: 'OAuth authorization code is required' })
+    .trim()
+    .min(1, 'OAuth authorization code is required')
+});
 
 /**
  * Helper to format Zod validation errors into a clean, field-keyed object

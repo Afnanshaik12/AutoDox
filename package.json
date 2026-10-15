@@ -8,7 +8,8 @@
     "dev": "vite",
     "server": "node server/src/index.js",
     "server:dev": "node --watch server/src/index.js",
-    "test": "node server/tests/auth.test.js && node server/tests/vault.test.js && node server/tests/extension.test.js",
+    "test": "node server/tests/auth.test.js && node server/tests/vault.test.js && node server/tests/extension.test.js && node server/tests/handoff.test.js",
+    "test:handoff": "node server/tests/handoff.test.js",
     "check:supabase": "node server/scripts/verify-supabase.js",
     "build": "vite build && node scripts/build-scripts.js",
     "preview": "vite preview"

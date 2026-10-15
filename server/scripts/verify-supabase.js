@@ -120,6 +120,36 @@ async function runVerification() {
       }
     }
 
+    // 6. Test Google OAuth Provider Configuration
+    console.log('\n5. Checking Google OAuth Provider Status:');
+    try {
+      const oauthRes = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: 'https://auto-dox.vercel.app/#/vault' }
+      });
+
+      if (oauthRes.data?.url) {
+        // Probe whether provider is enabled on Supabase server
+        const probeRes = await fetch(oauthRes.data.url, { redirect: 'manual' });
+        const probeBody = await probeRes.text();
+        if (probeBody.includes('Unsupported provider') || probeBody.includes('provider is not enabled')) {
+          console.log('   ⚠️ Google OAuth: Provider NOT enabled in Supabase Dashboard.');
+          console.log('      To complete setup:');
+          console.log('      1. Go to Supabase Dashboard -> Authentication -> Providers -> Google');
+          console.log('      2. Enable the Google provider');
+          console.log('      3. Add your Google OAuth Client ID and Client Secret');
+          console.log('      4. In Google Cloud Console, set Authorized Redirect URI:');
+          console.log(`         ${env.SUPABASE_URL}/auth/v1/callback`);
+        } else {
+          console.log('   ✅ Google OAuth: Provider enabled and operational in Supabase!');
+        }
+      } else {
+        console.log(`   ⚠️ Google OAuth initialization notice: ${oauthRes.error?.message}`);
+      }
+    } catch (oauthErr) {
+      console.log(`   ℹ️ Google OAuth probe notice: ${oauthErr.message}`);
+    }
+
     console.log('\n======================================================');
     console.log('✅ Supabase Verification Complete: Connection Live');
     console.log('======================================================\n');

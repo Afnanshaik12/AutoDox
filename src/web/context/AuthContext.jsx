@@ -248,6 +248,132 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Login directly with a validated session (used for handoff and OAuth)
+  const loginWithSession = ({ token: newToken, user: newUser }) => {
+    // Clear any previous user data completely to prevent account switching leaks
+    localStorage.removeItem(TOKEN_KEY);
+    if (newToken) {
+      localStorage.setItem(TOKEN_KEY, newToken);
+    }
+    setToken(newToken);
+    setUser(newUser);
+    setAuthError(null);
+  };
+
+  // Establish session with an existing Bearer token and fetch fresh profile
+  const loginWithToken = async (newToken) => {
+    setAuthError(null);
+    try {
+      // Clear old session
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.setItem(TOKEN_KEY, newToken);
+      setToken(newToken);
+
+      const res = await fetch(apiUrl('/api/auth/me'), {
+        headers: {
+          Authorization: `Bearer ${newToken}`
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+        return { success: true, user: data.user };
+      } else {
+        localStorage.removeItem(TOKEN_KEY);
+        setToken(null);
+        setUser(null);
+        return { success: false, message: 'Invalid or expired session token.' };
+      }
+    } catch (err) {
+      console.error('Session establishment network error:', err);
+      return { success: false, message: 'Could not connect to server to verify session.' };
+    }
+  };
+
+  // Exchange extension handoff code for authenticated website session
+  const exchangeHandoffCode = async (code, expectedUserId = null) => {
+    setAuthError(null);
+    try {
+      const res = await fetch(apiUrl('/api/auth/handoff/exchange'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ code, expectedUserId })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        const errorMsg = data.message || 'Extension session handoff failed.';
+        setAuthError({ message: errorMsg });
+        return { success: false, message: errorMsg };
+      }
+
+      // Establish fresh session, wiping previous user session
+      loginWithSession({ token: data.token, user: data.user });
+      return { success: true, token: data.token, user: data.user, targetUrl: data.targetUrl };
+    } catch (err) {
+      const networkError = 'Could not connect to server to complete session handoff.';
+      setAuthError({ message: networkError });
+      return { success: false, message: networkError };
+    }
+  };
+
+  // Initiate Supabase Google OAuth sign-in flow
+  const signInWithGoogle = async (redirectTo = null) => {
+    setAuthError(null);
+    try {
+      const appBaseUrl = window.location.origin;
+      const targetRedirect = redirectTo || `${appBaseUrl}/#/vault`;
+
+      const res = await fetch(apiUrl(`/api/auth/oauth/google?redirectTo=${encodeURIComponent(targetRedirect)}&format=json`));
+      const data = await res.json();
+
+      if (!res.ok || !data.url) {
+        const errorMsg = data.message || 'Unable to initiate Google sign-in.';
+        setAuthError({ message: errorMsg });
+        return { success: false, message: errorMsg };
+      }
+
+      // Redirect browser to Supabase Google OAuth endpoint
+      window.location.href = data.url;
+      return { success: true, url: data.url };
+    } catch (err) {
+      const networkError = 'Could not connect to server to initiate Google sign-in.';
+      setAuthError({ message: networkError });
+      return { success: false, message: networkError };
+    }
+  };
+
+  // Exchange PKCE OAuth authorization code
+  const exchangeOAuthCode = async (code) => {
+    setAuthError(null);
+    try {
+      const res = await fetch(apiUrl('/api/auth/oauth/exchange-code'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ code })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        const errorMsg = data.message || 'Failed to complete OAuth sign-in.';
+        setAuthError({ message: errorMsg });
+        return { success: false, message: errorMsg };
+      }
+
+      loginWithSession({ token: data.token, user: data.user });
+      return { success: true, token: data.token, user: data.user };
+    } catch (err) {
+      const networkError = 'Could not connect to server to exchange OAuth code.';
+      setAuthError({ message: networkError });
+      return { success: false, message: networkError };
+    }
+  };
+
   const value = {
     user,
     token,
@@ -261,7 +387,12 @@ export function AuthProvider({ children }) {
     forgotPassword,
     resetPassword,
     verifyRecoveryToken,
-    testProtectedEndpoint
+    testProtectedEndpoint,
+    loginWithSession,
+    loginWithToken,
+    exchangeHandoffCode,
+    signInWithGoogle,
+    exchangeOAuthCode
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

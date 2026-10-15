@@ -6,9 +6,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node tests/auth.test.js && node tests/vault.test.js",
+    "test": "node tests/auth.test.js && node tests/vault.test.js && node tests/extension.test.js && node tests/handoff.test.js",
     "test:auth": "node tests/auth.test.js",
-    "test:vault": "node tests/vault.test.js"
+    "test:vault": "node tests/vault.test.js",
+    "test:handoff": "node tests/handoff.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

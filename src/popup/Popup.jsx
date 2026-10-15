@@ -24,11 +24,19 @@ import {
   fetchUserProfiles, 
   fetchProfileAttributes, 
   getActiveProfileId, 
-  setActiveProfileId 
+  setActiveProfileId,
+  createAuthHandoff
 } from '../utils/api';
+import { storage } from '../utils/storage';
 import './Popup.css';
 
-const WEBSITE_BASE_URL = 'http://localhost:5173';
+const PRODUCTION_WEBSITE_URL = 'https://auto-dox.vercel.app';
+const DEV_WEBSITE_URL = 'http://localhost:5173';
+
+// Resolve default website base URL based on build/runtime environment
+const DEFAULT_WEBSITE_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_WEBSITE_URL)
+  ? import.meta.env.VITE_WEBSITE_URL
+  : ((typeof import.meta !== 'undefined' && import.meta.env?.DEV) ? DEV_WEBSITE_URL : PRODUCTION_WEBSITE_URL);
 
 export default function Popup() {
   const [loading, setLoading] = useState(true);
@@ -37,6 +45,7 @@ export default function Popup() {
   const [activeProfileId, setActiveProfileIdState] = useState(null);
   const [profileAttributes, setProfileAttributes] = useState([]);
   const [copiedFieldId, setCopiedFieldId] = useState(null);
+  const [websiteBaseUrl, setWebsiteBaseUrl] = useState(DEFAULT_WEBSITE_BASE_URL);
 
   // Autofill execution status & proposed matches for user approval
   const [isAutofilling, setIsAutofilling] = useState(false);
@@ -81,6 +90,15 @@ export default function Popup() {
   useEffect(() => {
     async function init() {
       try {
+        try {
+          const siteRes = await storage.get(['autodox_website_url']);
+          if (siteRes?.autodox_website_url) {
+            setWebsiteBaseUrl(siteRes.autodox_website_url);
+          }
+        } catch (e) {
+          // Keep default website URL
+        }
+
         const account = await getConnectedAccount();
         if (account && account.token) {
           setConnectedAccount(account);
@@ -346,9 +364,29 @@ export default function Popup() {
     setProposedMatches(null);
   };
 
-  // Open external website URLs
-  const openUrl = (path = '') => {
-    const targetUrl = `${WEBSITE_BASE_URL}${path}`;
+  // Open external website URLs with secure session handoff if authenticated
+  const openUrl = async (path = '/#/vault') => {
+    const base = (websiteBaseUrl || DEFAULT_WEBSITE_BASE_URL).replace(/\/+$/, '');
+    let targetUrl;
+
+    if (connectedAccount?.token) {
+      try {
+        const handoffCode = await createAuthHandoff(connectedAccount.token);
+        if (handoffCode) {
+          // Pass short-lived, single-use handoff code in hash fragment
+          // Never puts tokens, passwords, or secrets in URL
+          targetUrl = `${base}/#/vault?handoff=${encodeURIComponent(handoffCode)}`;
+        }
+      } catch (e) {
+        console.warn('[AutoDox Popup] Handoff code creation notice:', e);
+      }
+    }
+
+    if (!targetUrl) {
+      const normalizedPath = path ? (path.startsWith('/') ? path : `/${path}`) : '';
+      targetUrl = `${base}${normalizedPath}`;
+    }
+
     if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
       chrome.tabs.create({ url: targetUrl });
     } else {
@@ -585,7 +623,7 @@ export default function Popup() {
                   <button 
                     type="button" 
                     className="btn-empty-manage"
-                    onClick={() => openUrl('/#vault')}
+                    onClick={() => openUrl('/#/vault')}
                   >
                     Add fields in Manage Vault
                   </button>
@@ -707,7 +745,7 @@ export default function Popup() {
         <button 
           type="button" 
           className="btn-bottom-nav"
-          onClick={() => openUrl('')}
+          onClick={() => openUrl('/#/vault')}
           title="Open AutoDox AI Website"
         >
           <ExternalLink size={14} />
@@ -717,7 +755,7 @@ export default function Popup() {
         <button 
           type="button" 
           className="btn-bottom-nav primary"
-          onClick={() => openUrl('/#vault')}
+          onClick={() => openUrl('/#/vault')}
           title="Manage My Vault"
         >
           <FolderOpen size={14} />
