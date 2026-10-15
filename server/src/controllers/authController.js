@@ -756,7 +756,7 @@ export async function initiateGoogleOAuth(req, res) {
     const supabase = getSupabaseClient();
 
     const appBaseUrl = (process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173').trim().replace(/\/+$/, '');
-    const requestedRedirect = (req.query?.redirectTo || req.body?.redirectTo || `${appBaseUrl}/#/vault`).trim();
+    const requestedRedirect = (req.query?.redirectTo || req.body?.redirectTo || appBaseUrl).trim();
 
     // Automated test runner fallback
     if (process.env.NODE_ENV === 'test') {
@@ -824,7 +824,7 @@ export async function exchangeOAuthCode(req, res) {
       });
     }
 
-    const { code } = parseResult.data;
+    const { code, codeVerifier } = parseResult.data;
 
     // Automated test runner fallback
     if (process.env.NODE_ENV === 'test') {

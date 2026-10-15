@@ -61,7 +61,8 @@ export const oauthExchangeSchema = z.object({
   code: z
     .string({ required_error: 'OAuth authorization code is required' })
     .trim()
-    .min(1, 'OAuth authorization code is required')
+    .min(1, 'OAuth authorization code is required'),
+  codeVerifier: z.string().optional()
 });
 
 /**

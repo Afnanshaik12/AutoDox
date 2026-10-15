@@ -14,6 +14,7 @@ if (supabaseUrl && (supabaseAnonKey || supabaseServiceKey)) {
     const key = supabaseAnonKey || supabaseServiceKey;
     supabase = createClient(supabaseUrl, key, {
       auth: {
+        flowType: 'implicit',
         persistSession: false,
         autoRefreshToken: false
       }
@@ -22,6 +23,7 @@ if (supabaseUrl && (supabaseAnonKey || supabaseServiceKey)) {
     if (supabaseServiceKey) {
       supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
         auth: {
+          flowType: 'implicit',
           persistSession: false,
           autoRefreshToken: false
         }

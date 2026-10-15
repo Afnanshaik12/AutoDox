@@ -266,8 +266,6 @@ export function AuthProvider({ children }) {
     try {
       // Clear old session
       localStorage.removeItem(TOKEN_KEY);
-      localStorage.setItem(TOKEN_KEY, newToken);
-      setToken(newToken);
 
       const res = await fetch(apiUrl('/api/auth/me'), {
         headers: {
@@ -277,6 +275,8 @@ export function AuthProvider({ children }) {
 
       if (res.ok) {
         const data = await res.json();
+        localStorage.setItem(TOKEN_KEY, newToken);
+        setToken(newToken);
         setUser(data.user);
         return { success: true, user: data.user };
       } else {
@@ -287,6 +287,9 @@ export function AuthProvider({ children }) {
       }
     } catch (err) {
       console.error('Session establishment network error:', err);
+      localStorage.removeItem(TOKEN_KEY);
+      setToken(null);
+      setUser(null);
       return { success: false, message: 'Could not connect to server to verify session.' };
     }
   };
@@ -325,20 +328,35 @@ export function AuthProvider({ children }) {
     setAuthError(null);
     try {
       const appBaseUrl = window.location.origin;
-      const targetRedirect = redirectTo || `${appBaseUrl}/#/vault`;
+      // Use clean origin URL to prevent RFC 6749 double-hash collision (#/vault#access_token=...)
+      const targetRedirect = redirectTo || appBaseUrl;
 
-      const res = await fetch(apiUrl(`/api/auth/oauth/google?redirectTo=${encodeURIComponent(targetRedirect)}&format=json`));
-      const data = await res.json();
+      let oauthUrl = null;
 
-      if (!res.ok || !data.url) {
-        const errorMsg = data.message || 'Unable to initiate Google sign-in.';
-        setAuthError({ message: errorMsg });
-        return { success: false, message: errorMsg };
+      // 1. Attempt initiation via backend endpoint
+      try {
+        const res = await fetch(apiUrl(`/api/auth/oauth/google?redirectTo=${encodeURIComponent(targetRedirect)}&format=json`));
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.url) {
+            oauthUrl = data.url;
+          }
+        }
+      } catch (backendErr) {
+        console.warn('Backend OAuth initiation notice, falling back to direct Supabase authorization:', backendErr);
+      }
+
+      // 2. Direct Supabase authorization fallback if backend endpoint is unavailable or redeploy is pending
+      if (!oauthUrl) {
+        const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL)
+          ? import.meta.env.VITE_SUPABASE_URL
+          : 'https://czsbddgvmoguuntzxuhq.supabase.co';
+        oauthUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(targetRedirect)}`;
       }
 
       // Redirect browser to Supabase Google OAuth endpoint
-      window.location.href = data.url;
-      return { success: true, url: data.url };
+      window.location.href = oauthUrl;
+      return { success: true, url: oauthUrl };
     } catch (err) {
       const networkError = 'Could not connect to server to initiate Google sign-in.';
       setAuthError({ message: networkError });

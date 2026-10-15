@@ -31,18 +31,41 @@ export default function App() {
   useEffect(() => {
     let isSubscribed = true;
 
+    // Helper to robustly extract parameters from search, hash, or nested fragments
+    const extractAuthParams = () => {
+      const search = window.location.search || '';
+      const hash = window.location.hash || '';
+      const params = new URLSearchParams();
+
+      if (search) {
+        new URLSearchParams(search.replace(/^\?/, '')).forEach((v, k) => params.set(k, v));
+      }
+
+      if (hash) {
+        const rawHash = hash.replace(/^#/, '');
+        // Split on '#' in case of multiple hash segments (e.g. #/vault#access_token=...)
+        const segments = rawHash.split('#');
+        for (const segment of segments) {
+          if (segment.includes('=')) {
+            const queryPart = segment.includes('?') ? segment.split('?')[1] : segment;
+            new URLSearchParams(queryPart).forEach((v, k) => params.set(k, v));
+          } else if (segment.includes('?')) {
+            const queryPart = segment.split('?')[1];
+            new URLSearchParams(queryPart).forEach((v, k) => params.set(k, v));
+          }
+        }
+      }
+
+      return params;
+    };
+
     const checkHashAndParams = async () => {
       const hash = window.location.hash || '';
-      const search = window.location.search || '';
-
-      // Parse hash fragments and search params
-      const cleanHash = hash.replace(/^#/, '');
-      const hashParams = new URLSearchParams(cleanHash.includes('?') ? cleanHash.split('?')[1] : cleanHash);
-      const searchParams = new URLSearchParams(search.replace(/^\?/, ''));
+      const allParams = extractAuthParams();
 
       // 1. Check for OAuth errors (e.g. #error=... or ?error=...)
-      const error = hashParams.get('error') || searchParams.get('error');
-      const errorDesc = hashParams.get('error_description') || searchParams.get('error_description');
+      const error = allParams.get('error');
+      const errorDesc = allParams.get('error_description');
       if (error) {
         if (!isSubscribed) return;
         setExternalError(decodeURIComponent(errorDesc || error));
@@ -53,17 +76,17 @@ export default function App() {
       }
 
       // 2. Check for Extension-to-Website Handoff Authorization Code (Task 2)
-      const handoffCode = hashParams.get('handoff') || searchParams.get('handoff') || hashParams.get('auth_handoff') || searchParams.get('auth_handoff');
+      const handoffCode = allParams.get('handoff') || allParams.get('auth_handoff');
       if (handoffCode) {
+        // Clean address bar immediately to prevent token/code leakage during async roundtrip
+        window.history.replaceState(null, '', window.location.pathname + '#/vault');
         const result = await exchangeHandoffCode(handoffCode);
         if (!isSubscribed) return;
-
-        // Clean the browser address bar to maintain the canonical URL: https://auto-dox.vercel.app/#/vault
-        window.history.replaceState(null, '', window.location.pathname + '#/vault');
 
         if (result.success) {
           setActiveView('dashboard');
         } else {
+          window.history.replaceState(null, '', window.location.pathname + '#login');
           setExternalError(result.message || 'Extension session handoff authorization code has expired or is invalid.');
           setAuthMode('login');
           setActiveView('auth');
@@ -72,19 +95,19 @@ export default function App() {
       }
 
       // 3. Check for Supabase Google OAuth access_token (Implicit Flow in Hash)
-      const accessToken = hashParams.get('access_token');
-      const type = hashParams.get('type') || searchParams.get('type');
+      const accessToken = allParams.get('access_token');
+      const type = allParams.get('type');
 
       if (accessToken && type !== 'recovery') {
+        // Clean access token from URL immediately for security before network validation
+        window.history.replaceState(null, '', window.location.pathname + '#/vault');
         const result = await loginWithToken(accessToken);
         if (!isSubscribed) return;
-
-        // Clean access token from URL fragment immediately for security
-        window.history.replaceState(null, '', window.location.pathname + '#/vault');
 
         if (result.success) {
           setActiveView('dashboard');
         } else {
+          window.history.replaceState(null, '', window.location.pathname + '#login');
           setExternalError(result.message || 'Could not verify session from Google OAuth.');
           setAuthMode('login');
           setActiveView('auth');
@@ -93,17 +116,17 @@ export default function App() {
       }
 
       // 4. Check for Supabase OAuth PKCE authorization code (?code=... or #code=...)
-      const oauthCode = searchParams.get('code') || hashParams.get('code');
+      const oauthCode = allParams.get('code');
       if (oauthCode && type !== 'recovery') {
+        // Clean authorization code from URL immediately before network validation
+        window.history.replaceState(null, '', window.location.pathname + '#/vault');
         const result = await exchangeOAuthCode(oauthCode);
         if (!isSubscribed) return;
-
-        // Clean authorization code from URL
-        window.history.replaceState(null, '', window.location.pathname + '#/vault');
 
         if (result.success) {
           setActiveView('dashboard');
         } else {
+          window.history.replaceState(null, '', window.location.pathname + '#login');
           setExternalError(result.message || 'Failed to exchange Google OAuth authorization code.');
           setAuthMode('login');
           setActiveView('auth');
@@ -112,8 +135,9 @@ export default function App() {
       }
 
       // 5. Check for Password Recovery Token
-      const tokenVal = hashParams.get('token') || searchParams.get('token');
-      if (cleanHash.startsWith('reset-password') || cleanHash.startsWith('forgot-password') || type === 'recovery' || ((tokenVal || accessToken) && (cleanHash.includes('recovery') || search.includes('recovery')))) {
+      const tokenVal = allParams.get('token');
+      const cleanHash = hash.replace(/^#/, '');
+      if (cleanHash.startsWith('reset-password') || cleanHash.startsWith('forgot-password') || type === 'recovery' || ((tokenVal || accessToken) && (cleanHash.includes('recovery') || window.location.search.includes('recovery')))) {
         if (!isSubscribed) return;
         if (tokenVal || accessToken) {
           setRecoveryToken(tokenVal || accessToken);
@@ -124,24 +148,25 @@ export default function App() {
       }
 
       // 6. Navigation Routes based on hash (Preserves normal website login)
-      const cleanPath = cleanHash.split('?')[0].replace(/^\/+/, '');
-      if (cleanPath === 'vault') {
+      const firstSegment = (cleanHash.split('#')[0] || '').split('?')[0].replace(/^\/+/, '');
+      if (firstSegment === 'vault') {
         if (!isSubscribed) return;
-        if (!isAuthenticated) {
+        const storedToken = token || localStorage.getItem('autodox_auth_token');
+        if (isAuthenticated || storedToken) {
+          setActiveView('dashboard');
+        } else {
           setAuthMode('login');
           setActiveView('auth');
-        } else {
-          setActiveView('dashboard');
         }
-      } else if (cleanPath === 'login') {
+      } else if (firstSegment === 'login') {
         if (!isSubscribed) return;
         setAuthMode('login');
         setActiveView('auth');
-      } else if (cleanPath === 'register') {
+      } else if (firstSegment === 'register') {
         if (!isSubscribed) return;
         setAuthMode('register');
         setActiveView('auth');
-      } else if (cleanPath === 'forgot-password' || cleanPath === 'forgot') {
+      } else if (firstSegment === 'forgot-password' || firstSegment === 'forgot') {
         if (!isSubscribed) return;
         setAuthMode('forgot');
         setActiveView('auth');
@@ -167,6 +192,8 @@ export default function App() {
     );
   }
 
+  const storedToken = token || (typeof window !== 'undefined' && localStorage.getItem('autodox_auth_token'));
+
   return (
     <div className="web-app-wrapper">
       <Navbar 
@@ -178,7 +205,14 @@ export default function App() {
       <main className="web-content-area">
         {isAuthenticated ? (
           <ProtectedDashboard key={user?.id || token || 'dashboard'} />
-        ) : activeView === 'auth' ? (
+        ) : activeView === 'dashboard' && storedToken ? (
+          <div className="web-app-loading-screen">
+            <div className="loading-card">
+              <ShieldCheck size={32} className="loading-shield-spin" />
+              <p className="loading-text">Loading your secure vault...</p>
+            </div>
+          </div>
+        ) : activeView === 'auth' || activeView === 'dashboard' ? (
           <AuthView 
             initialMode={authMode} 
             initialToken={recoveryToken}
