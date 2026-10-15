@@ -9,7 +9,7 @@ export default function Navbar({ onOpenAuth, activeView, setActiveView }) {
     <header className="web-navbar">
       <div className="navbar-container">
         {/* Brand Logo */}
-        <div className="brand-group" onClick={() => setActiveView(isAuthenticated ? 'dashboard' : 'welcome')} role="button" tabIndex={0}>
+        <div className="brand-group" onClick={() => { window.location.hash = ''; setActiveView(isAuthenticated ? 'dashboard' : 'main'); }} role="button" tabIndex={0}>
           <div className="brand-logo-icon">
             <ShieldCheck size={22} className="shield-icon" />
           </div>

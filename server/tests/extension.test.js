@@ -137,6 +137,21 @@ async function runTests() {
     assert.strictEqual(data.user.email, userA.email);
   });
 
+  await test('Extension dispatches password recovery request with production redirect (200)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: userA.email,
+        redirectTo: 'https://auto-dox.vercel.app/#reset-password'
+      })
+    });
+    const data = await res.json();
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(data.status, 'success');
+    assert.match(data.message, /password-reset instructions/i);
+  });
+
   // 3. User Profiles & Profile Selection
   await test('Create "My Information" and "Father\'s Information" profiles for User A', async () => {
     // My Information

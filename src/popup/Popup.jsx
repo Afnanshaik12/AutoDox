@@ -716,6 +716,22 @@ export default function Popup() {
                     required
                   />
                 </div>
+                <div className="popup-forgot-password-wrap">
+                  <button 
+                    type="button" 
+                    className="btn-link-forgot-popup"
+                    onClick={() => {
+                      const targetUrl = 'https://auto-dox.vercel.app/#forgot-password';
+                      if (typeof chrome !== 'undefined' && chrome?.tabs?.create) {
+                        chrome.tabs.create({ url: targetUrl });
+                      } else {
+                        window.open(targetUrl, '_blank');
+                      }
+                    }}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
               </div>
 
               <button 

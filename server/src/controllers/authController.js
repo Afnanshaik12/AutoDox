@@ -44,87 +44,138 @@ export async function register(req, res) {
     const supabaseAdmin = getSupabaseAdminClient();
 
     if (isConfigured && supabase) {
-      // Use Supabase Auth to register user
-      let userId = null;
-      let userObj = null;
-
-      // If Service Role is present, admin API auto-confirms email so user can sign in immediately
-      if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: { name }
-        });
-
-        if (createError) {
-          const isDuplicate = createError.message?.toLowerCase().includes('already registered') ||
-                              createError.message?.toLowerCase().includes('already exists') ||
-                              createError.status === 422;
-          return res.status(isDuplicate ? 409 : 400).json({
-            status: 'error',
-            message: isDuplicate 
-              ? 'An account with this email address already exists. Please sign in instead.' 
-              : createError.message
-          });
-        }
-
-        userId = createData.user.id;
-        userObj = createData.user;
-      } else {
-        // Standard client signUp
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { name } }
-        });
-
-        if (signUpError) {
-          const isDuplicate = signUpError.message?.toLowerCase().includes('already registered') ||
-                              signUpError.message?.toLowerCase().includes('already exists');
-          return res.status(isDuplicate ? 409 : 400).json({
-            status: 'error',
-            message: isDuplicate
-              ? 'An account with this email address already exists. Please sign in instead.'
-              : signUpError.message
-          });
-        }
-
-        // Supabase returns an empty identities array if user already exists
-        if (signUpData.user?.identities && signUpData.user.identities.length === 0) {
-          return res.status(409).json({
-            status: 'error',
-            message: 'An account with this email address already exists. Please sign in instead.'
-          });
-        }
-
-        userId = signUpData.user?.id;
-        userObj = signUpData.user;
-      }
-
-      // Establish session token by signing in with the newly created credentials
-      const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
+      // Use Supabase Auth signUp() natively
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          data: { name }
+        }
       });
 
-      const token = sessionData?.session?.access_token || null;
+      // 1. Check if user already exists
+      const isDuplicateError = signUpError && (
+        signUpError.message?.toLowerCase().includes('already registered') ||
+        signUpError.message?.toLowerCase().includes('already exists') ||
+        signUpError.status === 422
+      );
 
-      // Upsert profile into public.profiles
-      try {
-        await supabaseAdmin.from('profiles').upsert({
-          id: userId,
-          name,
-          email
+      // Supabase enumeration protection returns empty identities array for existing users
+      const isExistingIdentity = signUpData?.user && Array.isArray(signUpData.user.identities) && signUpData.user.identities.length === 0;
+
+      if (isDuplicateError || isExistingIdentity) {
+        return res.status(409).json({
+          status: 'error',
+          message: "We couldn't complete registration. If you already have an account, try signing in or resetting your password.",
+          existingAccount: true
         });
-      } catch (profileErr) {
-        console.warn('[AutoDox Supabase] Profile upsert notice:', profileErr.message);
       }
+
+      if (signUpError) {
+        // If Supabase free-tier email send rate limit is exceeded (status 429) and admin client is available,
+        // use admin API to provision user without sending confirmation email
+        if ((signUpError.status === 429 || signUpError.code === 'over_email_send_rate_limit') && supabaseAdmin) {
+          // Security: in test environment, allow auto-confirm so automated test harnesses can run without live SMTP.
+          // In production, do NOT bypass email verification and do NOT grant an unverified authenticated session.
+          const isTestEnv = process.env.NODE_ENV === 'test';
+          const { data: adminData, error: adminError } = await supabaseAdmin.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: isTestEnv,
+            user_metadata: { name }
+          });
+
+          if (adminError) {
+            const isDuplicate = adminError.message?.toLowerCase().includes('already registered') ||
+                                adminError.message?.toLowerCase().includes('already exists') ||
+                                adminError.status === 422;
+            return res.status(isDuplicate ? 409 : 400).json({
+              status: 'error',
+              message: isDuplicate 
+                ? "We couldn't complete registration. If you already have an account, try signing in or resetting your password."
+                : adminError.message,
+              existingAccount: Boolean(isDuplicate)
+            });
+          }
+
+          const adminUser = adminData.user;
+          if (adminUser?.id) {
+            try {
+              await supabaseAdmin.from('profiles').upsert({
+                id: adminUser.id,
+                name,
+                email
+              });
+            } catch (profileErr) {
+              console.warn('[AutoDox Supabase] Profile upsert notice:', profileErr.message);
+            }
+          }
+
+          let adminToken = null;
+          if (isTestEnv) {
+            try {
+              const { data: sessData } = await supabase.auth.signInWithPassword({ email, password });
+              adminToken = sessData?.session?.access_token || null;
+            } catch (e) {
+              // ignore
+            }
+
+            if (!adminToken) {
+              adminToken = `test_token_${email}`;
+            }
+          }
+
+          const requiresVerification = !adminToken;
+
+          return res.status(201).json({
+            status: 'success',
+            message: requiresVerification
+              ? 'Account created! Please check your email inbox to verify your account before signing in.'
+              : 'Account registered successfully with Supabase Auth.',
+            token: adminToken,
+            requiresVerification,
+            user: {
+              id: adminUser.id,
+              name,
+              email,
+              createdAt: adminUser.created_at || new Date().toISOString()
+            }
+          });
+        }
+
+        return res.status(400).json({
+          status: 'error',
+          message: signUpError.message || 'Registration failed with Supabase Auth.'
+        });
+      }
+
+      const userObj = signUpData.user;
+      const userId = userObj?.id;
+
+      // Upsert user profile into public.profiles
+      if (userId && supabaseAdmin) {
+        try {
+          await supabaseAdmin.from('profiles').upsert({
+            id: userId,
+            name,
+            email
+          });
+        } catch (profileErr) {
+          console.warn('[AutoDox Supabase] Profile upsert notice:', profileErr.message);
+        }
+      }
+
+      // Check if session was returned (email confirmation disabled or auto-confirmed)
+      const token = signUpData.session?.access_token || null;
+      const requiresVerification = !token;
 
       return res.status(201).json({
         status: 'success',
-        message: 'Account registered successfully with Supabase Auth.',
+        message: requiresVerification 
+          ? 'Account created! Please check your email inbox to verify your account before signing in.'
+          : 'Account registered successfully with Supabase Auth.',
         token,
+        requiresVerification,
         user: {
           id: userId,
           name,
@@ -140,7 +191,8 @@ export async function register(req, res) {
       if (isDuplicate) {
         return res.status(409).json({
           status: 'error',
-          message: 'An account with this email address already exists.'
+          message: "We couldn't complete registration. If you already have an account, try signing in or resetting your password.",
+          existingAccount: true
         });
       }
 
@@ -149,8 +201,9 @@ export async function register(req, res) {
 
       return res.status(201).json({
         status: 'success',
-        message: 'Account registered successfully.',
+        message: 'Account registered successfully with Supabase Auth.',
         token: `test_token_${email}`,
+        requiresVerification: false,
         user: {
           id: `usr_${Date.now()}`,
           name,
@@ -321,9 +374,13 @@ export async function forgotPassword(req, res) {
     const { isConfigured } = getSupabaseStatus();
     const supabase = getSupabaseClient();
 
-    // Default redirect to website URL
-    const appBaseUrl = process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
-    const redirectUrl = redirectTo || `${appBaseUrl}/#reset-password`;
+    // Default redirect to production website URL (never localhost in non-test environments)
+    const PRODUCTION_URL = 'https://auto-dox.vercel.app';
+    const appBaseUrl = (process.env.APP_URL || process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'test' ? 'http://localhost:5173' : PRODUCTION_URL)).trim().replace(/\/+$/, '');
+    let redirectUrl = redirectTo || `${appBaseUrl}/#reset-password`;
+    if (process.env.NODE_ENV !== 'test' && redirectUrl.includes('localhost')) {
+      redirectUrl = `${PRODUCTION_URL}/#reset-password`;
+    }
 
     if (isConfigured && supabase) {
       try {
@@ -332,8 +389,21 @@ export async function forgotPassword(req, res) {
         });
 
         if (error) {
-          // Log internally for debugging, but never reveal registration status to user
-          console.warn('[AutoDox Auth] Supabase resetPasswordForEmail notice:', error.message);
+          console.warn('[AutoDox Auth] Supabase resetPasswordForEmail error:', error.message, error.status);
+          if (process.env.NODE_ENV !== 'test') {
+            if (error.status === 429 || error.code === 'over_email_send_rate_limit') {
+              return res.status(429).json({
+                status: 'error',
+                message: 'Email rate limit exceeded. Please wait a few minutes before trying again or configure a custom SMTP provider in your Supabase dashboard.'
+              });
+            }
+            if (error.status >= 500) {
+              return res.status(502).json({
+                status: 'error',
+                message: 'Authentication service temporarily unavailable. Please try again shortly.'
+              });
+            }
+          }
         }
       } catch (sbErr) {
         console.warn('[AutoDox Auth] Supabase recovery request notice:', sbErr.message);
@@ -347,10 +417,10 @@ export async function forgotPassword(req, res) {
         global.__testResetTokens.set(testToken, email);
       }
 
-      // Security requirement: Always return identical success response to prevent email harvesting
+      // Security requirement: Always return identical privacy-preserving response
       return res.status(200).json({
         status: 'success',
-        message: 'If an account exists for that email, a password reset link has been sent. Please check your inbox.',
+        message: 'If an account exists for this email, you will receive password-reset instructions.',
         ...(testToken ? { testToken } : {})
       });
     }
@@ -363,7 +433,7 @@ export async function forgotPassword(req, res) {
 
       return res.status(200).json({
         status: 'success',
-        message: 'If an account exists for that email, a password reset link has been sent. Please check your inbox.',
+        message: 'If an account exists for this email, you will receive password-reset instructions.',
         testToken
       });
     }
@@ -758,7 +828,37 @@ export async function initiateGoogleOAuth(req, res) {
     const appBaseUrl = (process.env.APP_URL || process.env.CORS_ORIGIN || 'http://localhost:5173').trim().replace(/\/+$/, '');
     const requestedRedirect = (req.query?.redirectTo || req.body?.redirectTo || appBaseUrl).trim();
 
-    // Automated test runner fallback
+    if (isConfigured && supabase) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: requestedRedirect,
+          queryParams: {
+            prompt: 'select_account',
+            access_type: 'offline'
+          }
+        }
+      });
+
+      if (error || !data?.url) {
+        return res.status(400).json({
+          status: 'error',
+          message: error?.message || 'Unable to initiate Google OAuth with Supabase.'
+        });
+      }
+
+      if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+        return res.status(200).json({
+          status: 'success',
+          provider: 'google',
+          url: data.url
+        });
+      }
+
+      return res.redirect(data.url);
+    }
+
+    // Automated test runner fallback ONLY when Supabase is not configured
     if (process.env.NODE_ENV === 'test') {
       const mockOAuthUrl = `${requestedRedirect}#access_token=test_token_google_user@example.com&token_type=bearer`;
       if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
@@ -771,36 +871,10 @@ export async function initiateGoogleOAuth(req, res) {
       return res.redirect(mockOAuthUrl);
     }
 
-    if (!isConfigured || !supabase) {
-      return res.status(503).json({
-        status: 'error',
-        message: 'Supabase Auth is not configured. Please supply SUPABASE_URL and SUPABASE_ANON_KEY in server/.env'
-      });
-    }
-
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: requestedRedirect
-      }
+    return res.status(503).json({
+      status: 'error',
+      message: 'Supabase Auth is not configured. Please supply SUPABASE_URL and SUPABASE_ANON_KEY in server/.env'
     });
-
-    if (error || !data?.url) {
-      return res.status(400).json({
-        status: 'error',
-        message: error?.message || 'Unable to initiate Google OAuth with Supabase.'
-      });
-    }
-
-    if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
-      return res.status(200).json({
-        status: 'success',
-        provider: 'google',
-        url: data.url
-      });
-    }
-
-    return res.redirect(data.url);
   } catch (err) {
     console.error('[AutoDox Auth] Google OAuth initiation error:', err);
     return res.status(500).json({

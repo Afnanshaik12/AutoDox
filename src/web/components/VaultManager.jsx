@@ -173,12 +173,13 @@ export default function VaultManager() {
   };
 
   // Fetch all profiles for current user
-  const fetchProfiles = async (selectId = null) => {
+  const fetchProfiles = async (selectId = null, signal = null) => {
     if (!token) return;
     setLoadingProfiles(true);
     try {
       const res = await fetch(apiUrl('/api/vault/profiles'), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        signal
       });
       const data = await res.json();
       if (res.ok && data.status === 'success') {
@@ -197,6 +198,7 @@ export default function VaultManager() {
         }
       }
     } catch (err) {
+      if (err.name === 'AbortError') return;
       console.error('Failed to load profiles:', err);
       showToast('Error loading profiles from database', 'error');
     } finally {
@@ -205,18 +207,20 @@ export default function VaultManager() {
   };
 
   // Fetch attributes for active profile
-  const fetchAttributes = async (profileId) => {
+  const fetchAttributes = async (profileId, signal = null) => {
     if (!token || !profileId) return;
     setLoadingAttributes(true);
     try {
       const res = await fetch(apiUrl(`/api/vault/attributes?profileId=${profileId}`), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        signal
       });
       const data = await res.json();
       if (res.ok && data.status === 'success') {
         setAttributes(data.attributes || []);
       }
     } catch (err) {
+      if (err.name === 'AbortError') return;
       console.error('Failed to load attributes:', err);
     } finally {
       setLoadingAttributes(false);
@@ -224,12 +228,20 @@ export default function VaultManager() {
   };
 
   useEffect(() => {
-    fetchProfiles();
+    const controller = new AbortController();
+    fetchProfiles(null, controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, [token]);
 
   useEffect(() => {
     if (activeProfileId) {
-      fetchAttributes(activeProfileId);
+      const controller = new AbortController();
+      fetchAttributes(activeProfileId, controller.signal);
+      return () => {
+        controller.abort();
+      };
     }
   }, [activeProfileId, token]);
 

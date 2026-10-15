@@ -285,6 +285,7 @@ async function runTests() {
     assert.strictEqual(data.status, 'success');
     assert.strictEqual(data.provider, 'google');
     assert.ok(data.url, 'Expected OAuth URL in response');
+    assert.ok(data.url.includes('prompt=select_account') || data.url.includes('google'), 'Expected prompt=select_account in URL');
   });
 
   // Test 11: Supabase Google OAuth Initiation Route (POST - JSON mode)

@@ -13,8 +13,15 @@ export function AuthProvider({ children }) {
 
   // Validate session on load
   useEffect(() => {
+    let isCancelled = false;
     async function verifyExistingToken() {
       if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      // If user is already set (e.g. from immediate login/register response), avoid redundant /me network roundtrip
+      if (user) {
         setIsLoading(false);
         return;
       }
@@ -25,6 +32,8 @@ export function AuthProvider({ children }) {
             Authorization: `Bearer ${token}`
           }
         });
+
+        if (isCancelled) return;
 
         if (res.ok) {
           const data = await res.json();
@@ -38,15 +47,18 @@ export function AuthProvider({ children }) {
       } catch (err) {
         console.error('Session verification network error:', err);
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
       }
     }
 
     verifyExistingToken();
+    return () => { isCancelled = true; };
   }, [token]);
 
   // Register new user
-  const register = async ({ name, email, password }) => {
+  const register = async ({ name, email, password, confirmPassword }) => {
     setAuthError(null);
     try {
       const res = await fetch(apiUrl('/api/auth/register'), {
@@ -54,18 +66,28 @@ export function AuthProvider({ children }) {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ name, email, password, confirmPassword })
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         const errorObj = {
-          message: data.message || 'Registration failed',
-          errors: data.errors || {}
+          message: data.message || "We couldn't complete registration. If you already have an account, try signing in or resetting your password.",
+          errors: data.errors || {},
+          existingAccount: Boolean(data.existingAccount)
         };
         setAuthError(errorObj);
         return { success: false, ...errorObj };
+      }
+
+      if (data.requiresVerification || !data.token) {
+        return {
+          success: true,
+          requiresVerification: true,
+          message: data.message || 'Account created! Please check your email inbox to verify your account before signing in.',
+          user: data.user
+        };
       }
 
       localStorage.setItem(TOKEN_KEY, data.token);
@@ -351,7 +373,7 @@ export function AuthProvider({ children }) {
         const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL)
           ? import.meta.env.VITE_SUPABASE_URL
           : 'https://czsbddgvmoguuntzxuhq.supabase.co';
-        oauthUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(targetRedirect)}`;
+        oauthUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(targetRedirect)}&prompt=select_account&access_type=offline`;
       }
 
       // Redirect browser to Supabase Google OAuth endpoint

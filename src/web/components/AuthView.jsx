@@ -47,7 +47,10 @@ export default function AuthView({
     message: '' 
   });
 
+  const [suggestExistingAccount, setSuggestExistingAccount] = useState(false);
+
   const { 
+    isAuthenticated,
     login, 
     register, 
     forgotPassword, 
@@ -76,14 +79,30 @@ export default function AuthView({
   }, [initialGeneralError]);
 
   const handleGoogleSignIn = async () => {
+    // Prevent repeated clicks from starting multiple simultaneous authentication attempts
+    if (isGoogleSubmitting || isSubmitting) return;
+
+    // If user already has a valid session, handle it without unnecessary redirects
+    if (isAuthenticated) {
+      if (onSuccess) onSuccess();
+      return;
+    }
+
     setFieldErrors({});
     setGeneralError('');
     setSuccessMessage('');
+    setSuggestExistingAccount(false);
     setIsGoogleSubmitting(true);
-    const result = await signInWithGoogle();
-    if (!result?.success) {
+
+    try {
+      const result = await signInWithGoogle();
+      if (!result?.success) {
+        setIsGoogleSubmitting(false);
+        setGeneralError(result?.message || 'Unable to connect to Google sign-in.');
+      }
+    } catch (err) {
       setIsGoogleSubmitting(false);
-      setGeneralError(result?.message || 'Unable to connect to Google sign-in.');
+      setGeneralError('An unexpected error occurred while initiating Google sign-in.');
     }
   };
 
@@ -91,7 +110,17 @@ export default function AuthView({
   useEffect(() => {
     let isMounted = true;
     async function checkToken() {
-      if (mode === 'reset' && token) {
+      if (mode === 'reset') {
+        if (!token) {
+          setTokenVerification({
+            status: 'error',
+            valid: false,
+            userEmail: null,
+            message: 'No recovery credentials found. Please click the password-reset link sent to your email or request a new one.'
+          });
+          return;
+        }
+
         setTokenVerification({ status: 'checking', valid: null, userEmail: null, message: '' });
         try {
           const res = await verifyRecoveryToken(token);
@@ -128,16 +157,19 @@ export default function AuthView({
   }, [mode, token]);
 
   const handleTabSwitch = (newMode) => {
-    const targetMode = newMode === 'forgot' ? 'reset' : newMode;
+    const targetMode = newMode;
     setMode(targetMode);
     setFieldErrors({});
     setGeneralError('');
     setSuccessMessage('');
     setAuthError(null);
+    setSuggestExistingAccount(false);
 
     // Sync hash for clean URL experience
     if (targetMode === 'reset') {
       window.location.hash = 'reset-password';
+    } else if (targetMode === 'forgot') {
+      window.location.hash = 'forgot-password';
     } else if (targetMode === 'login') {
       window.location.hash = 'login';
     } else if (targetMode === 'register') {
@@ -164,24 +196,94 @@ export default function AuthView({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return; // Prevent duplicate submissions while a request is processing
+
     setFieldErrors({});
     setGeneralError('');
     setSuccessMessage('');
+    setSuggestExistingAccount(false);
 
     if (mode === 'register') {
+      const errors = {};
+      const trimmedName = name.trim();
+      const trimmedEmail = email.trim();
+
+      if (!trimmedName) {
+        errors.name = 'Full Name is required';
+      } else if (trimmedName.length < 2) {
+        errors.name = 'Full Name must be at least 2 characters long';
+      } else if (trimmedName.length > 60) {
+        errors.name = 'Full Name cannot exceed 60 characters';
+      }
+
+      if (!trimmedEmail) {
+        errors.email = 'Email address is required';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        errors.email = 'Please provide a valid email address';
+      }
+
+      if (!password) {
+        errors.password = 'Password is required';
+      } else if (password.length < 8) {
+        errors.password = 'Password must be at least 8 characters long';
+      } else if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+        errors.password = 'Password must contain at least one letter and one number';
+      }
+
+      if (!confirmPassword) {
+        errors.confirmPassword = 'Please confirm your password';
+      } else if (password !== confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        return;
+      }
+
       setIsSubmitting(true);
-      const result = await register({ name, email, password });
+      const result = await register({
+        name: trimmedName,
+        email: trimmedEmail,
+        password,
+        confirmPassword
+      });
       setIsSubmitting(false);
 
       if (result.success) {
-        if (onSuccess) onSuccess();
+        if (result.requiresVerification) {
+          setSuccessMessage(result.message || 'Account created! Please check your email inbox to verify your account before signing in.');
+        } else {
+          if (onSuccess) onSuccess();
+        }
       } else {
         setGeneralError(result.message);
         setFieldErrors(result.errors || {});
+        if (result.existingAccount || result.message?.toLowerCase().includes('already')) {
+          setSuggestExistingAccount(true);
+        }
       }
     } else if (mode === 'login') {
+      const errors = {};
+      const trimmedEmail = email.trim();
+
+      if (!trimmedEmail) {
+        errors.email = 'Email address is required';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        errors.email = 'Please provide a valid email address';
+      }
+
+      if (!password) {
+        errors.password = 'Password is required';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        return;
+      }
+
       setIsSubmitting(true);
-      const result = await login({ email, password });
+      const result = await login({ email: trimmedEmail, password });
       setIsSubmitting(false);
 
       if (result.success) {
@@ -191,17 +293,22 @@ export default function AuthView({
         setFieldErrors(result.errors || {});
       }
     } else if (mode === 'forgot') {
-      if (!email.trim()) {
+      const trimmedEmail = email.trim();
+      if (!trimmedEmail) {
         setFieldErrors({ email: 'Please enter your account email address.' });
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        setFieldErrors({ email: 'Please provide a valid email address.' });
         return;
       }
 
       setIsSubmitting(true);
-      const result = await forgotPassword({ email: email.trim() });
+      const result = await forgotPassword({ email: trimmedEmail });
       setIsSubmitting(false);
 
       if (result.success) {
-        setSuccessMessage(result.message || 'If an account exists for that email, a password reset link has been sent. Please check your inbox.');
+        setSuccessMessage(result.message || 'If an account exists for this email, you will receive password-reset instructions.');
       } else {
         setGeneralError(result.message);
         setFieldErrors(result.errors || {});
@@ -227,36 +334,26 @@ export default function AuthView({
         return;
       }
 
-      const activeToken = token.trim();
-      const activeEmail = email.trim();
+      const activeToken = token ? token.trim() : '';
 
-      // If no recovery token or code in session/URL:
+      // Secure reset enforcement: require valid recovery token or session credentials
+      // Do not permit password changes using only an email address
       if (!activeToken) {
-        if (!activeEmail) {
-          setFieldErrors({ email: 'Please enter your account email address' });
-          return;
-        }
+        setGeneralError('Password reset token or recovery credentials are required. Please use the password-reset link sent to your email or request a new one.');
+        return;
+      }
 
-        // Send recovery verification email for ownership
-        setIsSubmitting(true);
-        const forgotRes = await forgotPassword({ email: activeEmail });
-        setIsSubmitting(false);
-
-        if (forgotRes.success) {
-          setGeneralError('');
-          setSuccessMessage(`To verify account ownership, Supabase sent a recovery authorization link to ${activeEmail}. Check your inbox and click the link or paste your recovery code to update your password.`);
-        } else {
-          setGeneralError(forgotRes.message || 'Unable to initiate recovery authorization for this account.');
-        }
+      if (tokenVerification.valid === false) {
+        setGeneralError('The password reset link is invalid or has expired. Please request a new link.');
         return;
       }
 
       setIsSubmitting(true);
-      const result = await resetPassword({ password, token: activeToken, email: activeEmail });
+      const result = await resetPassword({ password, confirmPassword, token: activeToken });
       setIsSubmitting(false);
 
       if (result.success) {
-        setSuccessMessage('Password updated successfully');
+        setSuccessMessage('Your password has been successfully reset. You may now sign in with your new password.');
         setPassword('');
         setConfirmPassword('');
       } else {
@@ -289,7 +386,7 @@ export default function AuthView({
           <p className="auth-subtitle">
             {mode === 'login' && 'Access your centralized vault and synchronize with the Chrome extension.'}
             {mode === 'register' && 'Register to manage multiple profiles, personal attributes, and cloud autofill.'}
-            {mode === 'forgot' && 'Enter your registered email address to receive a secure Supabase password recovery link.'}
+            {mode === 'forgot' && 'Enter your registered email address to receive password-reset instructions.'}
             {mode === 'reset' && (tokenVerification.userEmail 
               ? `Enter and confirm a new strong password for ${tokenVerification.userEmail}` 
               : 'Choose a strong new password for your AutoDox account.')}
@@ -322,6 +419,32 @@ export default function AuthView({
             <AlertCircle size={16} className="alert-icon" />
             <div className="alert-content">
               <span>{generalError}</span>
+              {suggestExistingAccount && (
+                <div className="existing-account-actions">
+                  <button 
+                    type="button" 
+                    className="btn-alert-action"
+                    onClick={() => handleTabSwitch('login')}
+                  >
+                    Sign In
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn-alert-action secondary"
+                    onClick={() => handleTabSwitch('forgot')}
+                  >
+                    Forgot Password?
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn-alert-action google"
+                    onClick={handleGoogleSignIn}
+                    disabled={isGoogleSubmitting}
+                  >
+                    Continue with Google
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -376,11 +499,11 @@ export default function AuthView({
               <CheckCircle2 size={24} className="text-emerald" />
             </div>
             <h4 className="success-box-title">
-              {mode === 'forgot' ? 'Check Your Inbox' : 'Password updated successfully'}
+              {mode === 'forgot' ? 'Password-Reset Instructions' : 'Password Reset Successfully'}
             </h4>
             <p className="success-box-text">
               {mode === 'forgot' 
-                ? 'If an account is associated with that email, Supabase has sent a recovery link. Check your inbox and spam folder, then click the link to reset your password.' 
+                ? 'If an account exists for this email, you will receive password-reset instructions.' 
                 : 'Your password has been changed. You can now sign in with your new credentials.'}
             </p>
             <button 
@@ -388,7 +511,7 @@ export default function AuthView({
               className="btn-auth-submit"
               onClick={() => handleTabSwitch('login')}
             >
-              <span>{mode === 'forgot' ? 'Return to Sign In' : 'Return to Login'}</span>
+              <span>Sign In</span>
               <ArrowRight size={16} />
             </button>
           </div>
@@ -519,7 +642,7 @@ export default function AuthView({
                     <button 
                       type="button" 
                       className="btn-link-forgot"
-                      onClick={() => handleTabSwitch('reset')}
+                      onClick={() => handleTabSwitch('forgot')}
                     >
                       Forgot Password?
                     </button>
@@ -551,83 +674,54 @@ export default function AuthView({
               </div>
             )}
 
+            {/* Confirm Password Field (Register only) */}
+            {mode === 'register' && (
+              <div className={`form-field-group ${fieldErrors.confirmPassword ? 'has-error' : ''}`}>
+                <div className="label-row-split">
+                  <label htmlFor="reg-confirm-password" className="field-label">
+                    Confirm Password
+                  </label>
+                  {confirmPassword && password && (
+                    <span className={`match-badge ${confirmPassword === password ? 'match-ok' : 'match-no'}`}>
+                      {confirmPassword === password ? '✓ Passwords Match' : '✗ Passwords Do Not Match'}
+                    </span>
+                  )}
+                </div>
+                <div className="input-wrap">
+                  <Lock size={16} className="input-icon" />
+                  <input 
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    id="reg-confirm-password"
+                    placeholder="Confirm your password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
+                    required
+                  />
+                  <button 
+                    type="button" 
+                    className="btn-toggle-eye"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {fieldErrors.confirmPassword && (
+                  <span className="field-error-text">{fieldErrors.confirmPassword}</span>
+                )}
+              </div>
+            )}
+
             {/* Reset Password Form Fields (Reset mode) */}
             {mode === 'reset' && (
               <>
-                {/* Account Email (Shown if not yet verified by email session) */}
-                {!tokenVerification.userEmail && (
-                  <div className={`form-field-group ${fieldErrors.email ? 'has-error' : ''}`}>
-                    <label htmlFor="reset-email" className="field-label">
-                      Account Email Address
-                    </label>
-                    <div className="input-wrap">
-                      <Mail size={16} className="input-icon" />
-                      <input 
-                        type="email"
-                        id="reset-email"
-                        placeholder="name@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        autoComplete="email"
-                        required
-                      />
-                    </div>
-                    {fieldErrors.email && (
-                      <span className="field-error-text">{fieldErrors.email}</span>
-                    )}
-                  </div>
-                )}
-
-                {/* If session already verified */}
+                {/* Verified Recovery Session Badge */}
                 {tokenVerification.userEmail && (
                   <div className="verified-session-badge">
                     <CheckCircle2 size={15} className="text-emerald" />
                     <span>Verified Recovery Session for <strong>{tokenVerification.userEmail}</strong></span>
-                  </div>
-                )}
-
-                {/* Optional Recovery Code / Token input if not verified from URL link */}
-                {!tokenVerification.valid && (
-                  <div className={`form-field-group ${fieldErrors.token ? 'has-error' : ''}`}>
-                    <div className="label-row-split">
-                      <label htmlFor="reset-token" className="field-label">
-                        Recovery Code / Token
-                      </label>
-                      <button 
-                        type="button" 
-                        className="btn-link-action"
-                        onClick={async () => {
-                          if (!email.trim()) {
-                            setFieldErrors({ email: 'Please enter your email above to receive a code' });
-                            return;
-                          }
-                          setIsSubmitting(true);
-                          const res = await forgotPassword({ email: email.trim() });
-                          setIsSubmitting(false);
-                          if (res.success) {
-                            setGeneralError('');
-                            setSuccessMessage(`Recovery link/code dispatched to ${email.trim()}.`);
-                          } else {
-                            setGeneralError(res.message);
-                          }
-                        }}
-                      >
-                        Send Code to Email
-                      </button>
-                    </div>
-                    <div className="input-wrap">
-                      <KeyRound size={16} className="input-icon" />
-                      <input 
-                        type="text"
-                        id="reset-token"
-                        placeholder="Enter recovery code or token from email"
-                        value={token}
-                        onChange={(e) => setToken(e.target.value)}
-                      />
-                    </div>
-                    {fieldErrors.token && (
-                      <span className="field-error-text">{fieldErrors.token}</span>
-                    )}
                   </div>
                 )}
 

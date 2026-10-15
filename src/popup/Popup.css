@@ -2693,5 +2693,112 @@
   color: #0f172a;
 }
 
+/* Extension Forgot Password Styles */
+.popup-forgot-password-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.btn-link-forgot-popup {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.btn-link-forgot-popup:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.popup-auth-footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-link-text {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s ease;
+}
+
+.btn-link-text:hover {
+  color: #1e293b;
+}
+
+.btn-link-text.secondary {
+  color: #2563eb;
+}
+
+.btn-link-text.secondary:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.btn-popup-back {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-popup-back:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.modal-success-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.modal-success-box .success-icon {
+  color: #16a34a;
+}
+
+.modal-success-box .success-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #15803d;
+}
+
+.modal-success-box .success-sub {
+  font-size: 10.5px;
+  color: #166534;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
 
 

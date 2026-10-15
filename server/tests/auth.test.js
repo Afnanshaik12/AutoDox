@@ -111,7 +111,7 @@ async function runTests() {
     createdUserId = data.user.id;
   });
 
-  // Test 4: Duplicate Email Rejection
+  // Test 4: Duplicate Email Rejection with Privacy-Preserving Message
   await test('POST /api/auth/register rejects duplicate email with 409 Conflict', async () => {
     const res = await fetch(`${BASE_URL}/auth/register`, {
       method: 'POST',
@@ -121,7 +121,44 @@ async function runTests() {
     const data = await res.json();
     assert.strictEqual(res.status, 409);
     assert.strictEqual(data.status, 'error');
-    assert.match(data.message, /already exists/i);
+    assert.ok(data.existingAccount === true);
+    assert.match(data.message, /already have an account|already exists/i);
+  });
+
+  // Test 4b: Password Confirmation Mismatch Rejection
+  await test('POST /api/auth/register fails with 400 when confirmPassword does not match', async () => {
+    const res = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Mismatched User',
+        email: `mismatch_${Date.now()}@example.com`,
+        password: 'ValidPassword123!',
+        confirmPassword: 'DifferentPassword456!'
+      })
+    });
+    const data = await res.json();
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(data.status, 'error');
+    assert.ok(data.errors.confirmPassword, 'Expected confirmPassword error');
+    assert.match(data.errors.confirmPassword, /passwords do not match/i);
+  });
+
+  // Test 4c: Successful Registration with Matching Password Confirmation
+  await test('POST /api/auth/register succeeds when confirmPassword matches', async () => {
+    const res = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Matched User',
+        email: `matched_${Date.now()}@example.com`,
+        password: 'ValidPassword123!',
+        confirmPassword: 'ValidPassword123!'
+      })
+    });
+    const data = await res.json();
+    assert.strictEqual(res.status, 201);
+    assert.strictEqual(data.status, 'success');
   });
 
   // Test 5: Login with Wrong Password
@@ -244,7 +281,7 @@ async function runTests() {
     const data = await res.json();
     assert.strictEqual(res.status, 200);
     assert.strictEqual(data.status, 'success');
-    assert.match(data.message, /password reset link has been sent/i);
+    assert.match(data.message, /password-reset instructions/i);
   });
 
   // Test 14: Forgot Password for registered account
@@ -261,8 +298,23 @@ async function runTests() {
     const data = await res.json();
     assert.strictEqual(res.status, 200);
     assert.strictEqual(data.status, 'success');
-    assert.match(data.message, /password reset link has been sent/i);
+    assert.match(data.message, /password-reset instructions/i);
     resetRecoveryToken = data.testToken || `test_recovery_${Buffer.from(testUser.email).toString('hex')}`;
+  });
+
+  // Test 14b: Forgot Password accepts and enforces production redirect URL (never localhost)
+  await test('POST /api/auth/forgot-password supports production redirect to https://auto-dox.vercel.app', async () => {
+    const res = await fetch(`${BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testUser.email,
+        redirectTo: 'https://auto-dox.vercel.app/#reset-password'
+      })
+    });
+    const data = await res.json();
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(data.status, 'success');
   });
 
   // Test 14.5: Recovery Link Verification - Valid Token
@@ -314,13 +366,48 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         token: 'invalid_expired_token_123',
-        password: 'BrandNewPassword123'
+        password: 'BrandNewPassword123',
+        confirmPassword: 'BrandNewPassword123'
       })
     });
     const data = await res.json();
     assert.strictEqual(res.status, 400);
     assert.strictEqual(data.status, 'error');
     assert.match(data.message, /invalid or has expired/i);
+  });
+
+  // Test 16b: Reset Password fails with 400 when password and confirmPassword do not match
+  await test('POST /api/auth/reset-password fails with 400 when confirmPassword does not match', async () => {
+    const res = await fetch(`${BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: resetRecoveryToken || 'test_token',
+        password: 'Password12345!',
+        confirmPassword: 'DifferentPassword12345!'
+      })
+    });
+    const data = await res.json();
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(data.status, 'error');
+    assert.ok(data.errors.confirmPassword, 'Expected confirmPassword validation error');
+  });
+
+  // Test 16c: Reset Password rejects request using only an email address without token
+  await test('POST /api/auth/reset-password rejects password change using only email without recovery token (400)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testUser.email,
+        password: 'BrandNewPassword123!',
+        confirmPassword: 'BrandNewPassword123!'
+      })
+    });
+    const data = await res.json();
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(data.status, 'error');
+    assert.match(data.message, /token or recovery code is required/i);
   });
 
   // Test 17: Reset Password Success & Login Verification
@@ -336,7 +423,8 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         token: resetRecoveryToken,
-        password: updatedNewPassword
+        password: updatedNewPassword,
+        confirmPassword: updatedNewPassword
       })
     });
     const data = await res.json();

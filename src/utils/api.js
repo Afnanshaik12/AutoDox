@@ -206,3 +206,29 @@ export async function createAuthHandoff(tokenOverride = null) {
     return null;
   }
 }
+
+/**
+ * Request password recovery link via backend /api/auth/forgot-password
+ * Always specifies production website reset URL, never localhost
+ */
+export async function sendForgotPasswordEmail(email) {
+  const baseUrl = await getApiBaseUrl();
+  const redirectTo = 'https://auto-dox.vercel.app/#reset-password';
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, redirectTo })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, message: data.message || 'Failed to send reset link.' };
+    }
+    return { success: true, message: data.message };
+  } catch (err) {
+    return {
+      success: false,
+      message: 'Could not connect to AutoDox AI backend. Please verify your connection.'
+    };
+  }
+}

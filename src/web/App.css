@@ -774,6 +774,53 @@ body {
   color: #6ee7b7;
 }
 
+.existing-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn-alert-action {
+  background: rgba(59, 130, 246, 0.22);
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  color: #93c5fd;
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-alert-action:hover {
+  background: rgba(59, 130, 246, 0.4);
+  color: #ffffff;
+}
+
+.btn-alert-action.secondary {
+  background: rgba(148, 163, 184, 0.15);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #cbd5e1;
+}
+
+.btn-alert-action.secondary:hover {
+  background: rgba(148, 163, 184, 0.3);
+  color: #ffffff;
+}
+
+.btn-alert-action.google {
+  background: rgba(234, 67, 53, 0.15);
+  border-color: rgba(234, 67, 53, 0.4);
+  color: #fca5a5;
+}
+
+.btn-alert-action.google:hover {
+  background: rgba(234, 67, 53, 0.3);
+  color: #ffffff;
+}
+
 .forgot-password-link-wrap {
   display: flex;
   justify-content: flex-end;

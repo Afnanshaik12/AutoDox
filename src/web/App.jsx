@@ -25,6 +25,8 @@ export default function App() {
   const handleOpenAuth = (mode = 'login') => {
     setAuthMode(mode);
     setExternalError(null);
+    const targetHash = mode === 'register' ? 'register' : mode === 'forgot' ? 'forgot-password' : mode === 'reset' ? 'reset-password' : 'login';
+    window.location.hash = targetHash;
     setActiveView('auth');
   };
 
@@ -137,10 +139,12 @@ export default function App() {
       // 5. Check for Password Recovery Token
       const tokenVal = allParams.get('token');
       const cleanHash = hash.replace(/^#/, '');
-      if (cleanHash.startsWith('reset-password') || cleanHash.startsWith('forgot-password') || type === 'recovery' || ((tokenVal || accessToken) && (cleanHash.includes('recovery') || window.location.search.includes('recovery')))) {
+      if (cleanHash.startsWith('reset-password') || type === 'recovery' || ((tokenVal || accessToken) && (cleanHash.includes('recovery') || window.location.search.includes('recovery')))) {
         if (!isSubscribed) return;
         if (tokenVal || accessToken) {
           setRecoveryToken(tokenVal || accessToken);
+          // Sanitize URL address bar immediately to prevent recovery token leakage
+          window.history.replaceState(null, '', window.location.pathname + '#reset-password');
         }
         setAuthMode('reset');
         setActiveView('auth');
